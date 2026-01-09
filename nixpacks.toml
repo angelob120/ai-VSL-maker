@@ -4,8 +4,12 @@ nixPkgs = ['nodejs-18_x', 'ffmpeg']
 [phases.install]
 cmds = [
   'cd ai/server',
-  'npm ci --production'
+  'npm ci --omit=dev'
 ]
+
+[variables]
+PUPPETEER_SKIP_DOWNLOAD = 'true'
+PUPPETEER_EXECUTABLE_PATH = '/usr/bin/chromium'
 
 [start]
 cmd = 'cd ai/server && node index.js'
