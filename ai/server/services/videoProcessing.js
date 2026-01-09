@@ -1,4 +1,4 @@
-const ffmpeg = require('fluent-ffmpeg');
+const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs').promises;
 const { v4: uuidv4 } = require('uuid');
@@ -16,6 +16,63 @@ class VideoProcessingService {
   }
 
   /**
+   * Execute ffmpeg command
+   */
+  runFFmpeg(args) {
+    return new Promise((resolve, reject) => {
+      const ffmpeg = spawn('ffmpeg', args);
+      let stderr = '';
+
+      ffmpeg.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      ffmpeg.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`FFmpeg exited with code ${code}: ${stderr}`));
+        }
+      });
+
+      ffmpeg.on('error', (err) => {
+        reject(err);
+      });
+    });
+  }
+
+  /**
+   * Execute ffprobe command
+   */
+  runFFprobe(args) {
+    return new Promise((resolve, reject) => {
+      const ffprobe = spawn('ffprobe', args);
+      let stdout = '';
+      let stderr = '';
+
+      ffprobe.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      ffprobe.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      ffprobe.on('close', (code) => {
+        if (code === 0) {
+          resolve(stdout);
+        } else {
+          reject(new Error(`FFprobe exited with code ${code}: ${stderr}`));
+        }
+      });
+
+      ffprobe.on('error', (err) => {
+        reject(err);
+      });
+    });
+  }
+
+  /**
    * Capture scrolling website as video using Puppeteer
    */
   async captureWebsiteScroll(websiteUrl, options = {}) {
@@ -28,7 +85,8 @@ class VideoProcessingService {
 
     const browser = await puppeteer.launch({
       headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
     });
 
     const page = await browser.newPage();
@@ -65,24 +123,19 @@ class VideoProcessingService {
 
     await browser.close();
 
-    // Convert frames to video
+    // Convert frames to video using ffmpeg
     const outputPath = path.join(this.tempDir, `scroll_${uuidv4()}.mp4`);
     
-    await new Promise((resolve, reject) => {
-      ffmpeg()
-        .input(path.join(framesDir, 'frame_%05d.png'))
-        .inputFPS(fps)
-        .outputOptions([
-          '-c:v libx264',
-          '-pix_fmt yuv420p',
-          '-preset fast',
-          '-crf 23'
-        ])
-        .output(outputPath)
-        .on('end', resolve)
-        .on('error', reject)
-        .run();
-    });
+    await this.runFFmpeg([
+      '-y',
+      '-framerate', String(fps),
+      '-i', path.join(framesDir, 'frame_%05d.png'),
+      '-c:v', 'libx264',
+      '-pix_fmt', 'yuv420p',
+      '-preset', 'fast',
+      '-crf', '23',
+      outputPath
+    ]);
 
     // Clean up frames
     const frames = await fs.readdir(framesDir);
@@ -120,10 +173,6 @@ class VideoProcessingService {
 
     const pos = positions[position] || positions.bottom_right;
 
-    // Get video durations
-    const introDuration = await this.getVideoDuration(introVideoPath);
-    const websiteDuration = await this.getVideoDuration(websiteVideoPath);
-
     // Create filter for circular mask if needed
     let overlayFilter;
     if (shape === 'circle') {
@@ -133,26 +182,21 @@ class VideoProcessingService {
       overlayFilter = `[1:v]scale=${bubbleSize}:${bubbleSize}[bubble];[0:v][bubble]overlay=${pos.x}:${pos.y}:shortest=1`;
     }
 
-    return new Promise((resolve, reject) => {
-      ffmpeg()
-        .input(websiteVideoPath)
-        .input(introVideoPath)
-        .complexFilter([
-          overlayFilter
-        ])
-        .outputOptions([
-          '-c:v libx264',
-          '-c:a aac',
-          '-pix_fmt yuv420p',
-          '-preset fast',
-          '-crf 23',
-          '-shortest'
-        ])
-        .output(outputPath)
-        .on('end', () => resolve(outputPath))
-        .on('error', reject)
-        .run();
-    });
+    await this.runFFmpeg([
+      '-y',
+      '-i', websiteVideoPath,
+      '-i', introVideoPath,
+      '-filter_complex', overlayFilter,
+      '-c:v', 'libx264',
+      '-c:a', 'aac',
+      '-pix_fmt', 'yuv420p',
+      '-preset', 'fast',
+      '-crf', '23',
+      '-shortest',
+      outputPath
+    ]);
+
+    return outputPath;
   }
 
   /**
@@ -197,67 +241,53 @@ class VideoProcessingService {
     }
 
     // Create bubble portion
-    await new Promise((resolve, reject) => {
-      ffmpeg()
-        .input(websiteVideoPath)
-        .input(introVideoPath)
-        .complexFilter([overlayFilter])
-        .outputOptions([
-          '-c:v libx264',
-          '-c:a aac',
-          '-pix_fmt yuv420p',
-          '-preset fast',
-          '-crf 23',
-          `-t ${bubbleClipDuration}`
-        ])
-        .output(tempBubblePath)
-        .on('end', resolve)
-        .on('error', reject)
-        .run();
-    });
+    await this.runFFmpeg([
+      '-y',
+      '-i', websiteVideoPath,
+      '-i', introVideoPath,
+      '-filter_complex', overlayFilter,
+      '-c:v', 'libx264',
+      '-c:a', 'aac',
+      '-pix_fmt', 'yuv420p',
+      '-preset', 'fast',
+      '-crf', '23',
+      '-t', String(bubbleClipDuration),
+      tempBubblePath
+    ]);
 
     // If intro video is longer than bubble duration, concat with fullscreen portion
     if (introDuration > bubbleDuration) {
       const tempFullscreenPath = path.join(this.tempDir, `fullscreen_${uuidv4()}.mp4`);
       
       // Create fullscreen portion (skip first bubbleDuration seconds of intro)
-      await new Promise((resolve, reject) => {
-        ffmpeg()
-          .input(introVideoPath)
-          .inputOptions([`-ss ${bubbleDuration}`])
-          .outputOptions([
-            '-c:v libx264',
-            '-c:a aac',
-            '-pix_fmt yuv420p',
-            '-preset fast',
-            '-crf 23'
-          ])
-          .output(tempFullscreenPath)
-          .on('end', resolve)
-          .on('error', reject)
-          .run();
-      });
+      await this.runFFmpeg([
+        '-y',
+        '-ss', String(bubbleDuration),
+        '-i', introVideoPath,
+        '-c:v', 'libx264',
+        '-c:a', 'aac',
+        '-pix_fmt', 'yuv420p',
+        '-preset', 'fast',
+        '-crf', '23',
+        tempFullscreenPath
+      ]);
 
       // Concatenate bubble and fullscreen
       const concatListPath = path.join(this.tempDir, `concat_${uuidv4()}.txt`);
       await fs.writeFile(concatListPath, `file '${tempBubblePath}'\nfile '${tempFullscreenPath}'`);
 
-      await new Promise((resolve, reject) => {
-        ffmpeg()
-          .input(concatListPath)
-          .inputOptions(['-f concat', '-safe 0'])
-          .outputOptions([
-            '-c:v libx264',
-            '-c:a aac',
-            '-pix_fmt yuv420p',
-            '-preset fast',
-            '-crf 23'
-          ])
-          .output(outputPath)
-          .on('end', resolve)
-          .on('error', reject)
-          .run();
-      });
+      await this.runFFmpeg([
+        '-y',
+        '-f', 'concat',
+        '-safe', '0',
+        '-i', concatListPath,
+        '-c:v', 'libx264',
+        '-c:a', 'aac',
+        '-pix_fmt', 'yuv420p',
+        '-preset', 'fast',
+        '-crf', '23',
+        outputPath
+      ]);
 
       // Clean up
       await fs.unlink(tempBubblePath);
@@ -275,12 +305,13 @@ class VideoProcessingService {
    * Get video duration in seconds
    */
   async getVideoDuration(videoPath) {
-    return new Promise((resolve, reject) => {
-      ffmpeg.ffprobe(videoPath, (err, metadata) => {
-        if (err) reject(err);
-        else resolve(metadata.format.duration);
-      });
-    });
+    const output = await this.runFFprobe([
+      '-v', 'error',
+      '-show_entries', 'format=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1',
+      videoPath
+    ]);
+    return parseFloat(output.trim());
   }
 
   /**
