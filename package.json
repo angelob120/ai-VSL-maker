@@ -1,25 +1,12 @@
 {
-  "name": "ai-vsl-server",
+  "name": "ai-vsl-creator-deploy",
   "version": "1.0.0",
-  "description": "Backend for AI VSL Creator",
-  "main": "index.js",
+  "private": true,
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "start": "cd ai/server && npm start",
+    "postinstall": "cd ai/server && npm install"
   },
-  "dependencies": {
-    "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
-    "express": "^4.18.2",
-    "fluent-ffmpeg": "^2.1.2",
-    "multer": "^1.4.5-lts.1",
-    "pg": "^8.11.3",
-    "puppeteer": "^21.6.1",
-    "uuid": "^9.0.1",
-    "csv-parse": "^5.5.3",
-    "csv-stringify": "^6.4.5"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.2"
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
