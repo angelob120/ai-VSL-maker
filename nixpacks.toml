@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ['nodejs-18_x', 'ffmpeg']
+
+[phases.install]
+cmds = [
+  'cd ai/server',
+  'npm ci --production'
+]
+
+[start]
+cmd = 'cd ai/server && node index.js'
