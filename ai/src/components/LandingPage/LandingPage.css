@@ -1,0 +1,139 @@
+.landing-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.landing-page.dark {
+  background: linear-gradient(135deg, #0f0d1a 0%, #1a1625 50%, #0f0d1a 100%);
+  color: #ffffff;
+}
+
+.landing-page.light {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f8fafc 100%);
+  color: #1e293b;
+}
+
+.landing-page.loading,
+.landing-page.error {
+  flex-direction: column;
+  gap: 20px;
+  text-align: center;
+}
+
+.landing-page .loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid rgba(99, 102, 241, 0.2);
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.landing-page .error-icon {
+  font-size: 64px;
+  opacity: 0.5;
+}
+
+.landing-content {
+  max-width: 800px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.landing-title {
+  font-size: 32px;
+  font-weight: 700;
+  text-align: center;
+  margin: 0;
+  animation: fadeInUp 0.6s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.video-container {
+  width: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: fadeInUp 0.6s ease-out 0.2s backwards;
+}
+
+.landing-video {
+  width: 100%;
+  display: block;
+  background: #000;
+}
+
+.cta-section {
+  padding-top: 16px;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.5s ease;
+}
+
+.cta-section.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.cta-button {
+  display: inline-block;
+  padding: 16px 48px;
+  background: var(--accent-color, #6366f1);
+  color: white;
+  font-size: 18px;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+}
+
+.cta-button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 30px rgba(99, 102, 241, 0.5);
+}
+
+.landing-footer {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+.landing-page.light .landing-footer {
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .landing-title {
+    font-size: 24px;
+  }
+
+  .cta-button {
+    padding: 14px 32px;
+    font-size: 16px;
+  }
+}
